@@ -72,7 +72,8 @@ class Detect(nn.Module):
             else:
                 y = torch.cat([reg_output, obj_output.sigmoid(), cls_output.sigmoid()], 1)
                 bs, _, ny, nx = y.shape
-                y = y.view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
+                #y = y.view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
+                y = y.view(bs, self.no, ny, nx).permute(0, 2, 3, 1).contiguous()
                 if self.grid[i].shape[2:4] != y.shape[2:4]:
                     d = self.stride.device
                     yv, xv = torch.meshgrid([torch.arange(ny).to(d), torch.arange(nx).to(d)])
@@ -81,12 +82,27 @@ class Detect(nn.Module):
                     y[..., 0:2] = (y[..., 0:2] + self.grid[i]) * self.stride[i]  # xy
                     y[..., 2:4] = torch.exp(y[..., 2:4]) * self.stride[i] # wh
                 else:
-                    xy = (y[..., 0:2] + self.grid[i]) * self.stride[i]  # xy
-                    wh = torch.exp(y[..., 2:4]) * self.stride[i]  # wh
-                    y = torch.cat((xy, wh, y[..., 4:]), -1)
-                z.append(y.view(bs, -1, self.no))
-        return x if self.training else torch.cat(z, 1)
+                    deploy = True
+                    if deploy == False:
+                        #xy = (y[..., 0:2] + self.grid[i]) * self.stride[i]  # xy
+                        #wh = torch.exp(y[..., 2:4]) * self.stride[i]  # wh
+                        #y = torch.cat((xy, wh, y[..., 4:]), -1)
+                        y = self.decode_output(y, self.stride, self.grid, i)
+                    else:
+                        y = y
+                    print(y.shape)    
+                #z.append(y.view(bs, -1, self.no))
+                z.append(y.view(bs, 1, ny*nx, self.no))
+        #return x if self.training else torch.cat(z, 1)
+        return x if self.training else torch.cat(z, 2)
 
+    def decode_output(self, y, stride, grid, i):
+        xy, wh, obj, cls = torch.split(y, [2, 2, 1, self.nc], 3)
+        xy = (xy + self.grid[i]) * self.stride[i]
+        wh = torch.exp(wh) * self.stride[i]
+        xy = xy.reshape(xy.shape[0], xy.shape[2], xy.shape[3], xy.shape[4])
+        y = torch.cat((xy, wh, obj, cls), 3)
+        return y
 
 def build_effidehead_layer(channels_list, num_anchors, num_classes):
     head_layers = nn.Sequential(

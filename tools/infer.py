@@ -20,9 +20,9 @@ def get_args_parser(add_help=True):
     parser.add_argument('--weights', type=str, default='weights/yolov6s.pt', help='model path(s) for inference.')
     parser.add_argument('--source', type=str, default='data/images', help='the source path, e.g. image-file/dir.')
     parser.add_argument('--yaml', type=str, default='data/coco.yaml', help='data yaml file.')
-    parser.add_argument('--img-size', type=int, default=640, help='the image-size(h,w) in inference size.')
-    parser.add_argument('--conf-thres', type=float, default=0.25, help='confidence threshold for inference.')
-    parser.add_argument('--iou-thres', type=float, default=0.45, help='NMS IoU threshold for inference.')
+    parser.add_argument('--img-size', type=int, default=288, help='the image-size(h,w) in inference size.')
+    parser.add_argument('--conf-thres', type=float, default=0.35, help='confidence threshold for inference.')
+    parser.add_argument('--iou-thres', type=float, default=0.5, help='NMS IoU threshold for inference.')
     parser.add_argument('--max-det', type=int, default=1000, help='maximal inferences per image.')
     parser.add_argument('--device', default='0', help='device to run our model i.e. 0 or 0,1,2,3 or cpu.')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt.')
@@ -83,13 +83,20 @@ def run(weights=osp.join(ROOT, 'yolov6s.pt'),
         half: Use FP16 half-precision inference, e.g. False
     """
     # create save dir
+    #if save_dir is None:
     save_dir = osp.join(project, name)
+    save_txt_path = osp.join(save_dir, 'labels')
+    if not osp.exists(save_txt_path):
+        os.mkdir(save_txt_path, 0o777)
+    #else:
+    #    save_txt_path = save_dir
     if (save_img or save_txt) and not osp.exists(save_dir):
         os.makedirs(save_dir)
     else:
         LOGGER.warning('Save directory already existed')
     if save_txt:
-        os.mkdir(osp.join(save_dir, 'labels'))
+        if not osp.exists(save_txt_path):
+            os.makedirs(save_txt_path)
 
     # Inference
     inferer = Inferer(source, weights, device, yaml, img_size, half)
@@ -105,4 +112,5 @@ def main(args):
 
 if __name__ == "__main__":
     args = get_args_parser()
+    args.img_size = [288, 512]
     main(args)

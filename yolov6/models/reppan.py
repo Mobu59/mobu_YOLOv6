@@ -102,6 +102,7 @@ class RepPANNeck(nn.Module):
         down_feat0 = self.downsample1(pan_out1)
         p_concat_layer2 = torch.cat([down_feat0, fpn_out0], 1)
         pan_out0 = self.Rep_n4(p_concat_layer2)
+        #pan_out2, pan_out1, pan_out0 = x2, x1, x0
 
         outputs = [pan_out2, pan_out1, pan_out0]
 

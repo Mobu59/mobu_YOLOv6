@@ -8,6 +8,7 @@ import random
 
 import cv2
 import numpy as np
+import albumentations as albu
 
 def augment_hsv(im, hgain=0.5, sgain=0.5, vgain=0.5):
     # HSV color-space augmentation
@@ -77,7 +78,7 @@ def random_affine(img, labels=(), degrees=10, translate=.1, scale=.1, shear=10,
     n = len(labels)
     height,width = new_shape
 
-    M,s = get_transform_matrix(img.shape[:2],(height,width),degrees,scale,shear,translate)
+    M, s = get_transform_matrix(img.shape[:2],(height,width),degrees,scale,shear,translate)
     if (M != np.eye(3)).any():  # image changed
         img = cv2.warpAffine(img, M[:2], dsize=(width, height), borderValue=(114, 114, 114))
 
@@ -100,7 +101,8 @@ def random_affine(img, labels=(), degrees=10, translate=.1, scale=.1, shear=10,
         new[:, [1, 3]] = new[:, [1, 3]].clip(0, height)
 
         # filter candidates
-        i = box_candidates(box1=labels[:, 1:5].T * s, box2=new.T, area_thr=0.1)
+        #i = box_candidates(box1=labels[:, 1:5].T * s, box2=new.T, area_thr=0.1)
+        i = box_candidates(box1=labels[:, 1:5].T * s, box2=new.T, wh_thr=6.0, ar_thr=1.9, area_thr=0.1)
         labels = labels[i]
         labels[:, 1:5] = new[i]
 
@@ -191,3 +193,60 @@ def mosaic_augmentation(img_size, imgs, hs, ws, labels, hyp):
                                        shear=hyp['shear'])
 
     return img4, labels4
+
+
+def get_head_shoulder_augmentation(phase, width=640, height=640, min_area=0., min_visibility=0., bbox_format='pascal_voc'):
+    print("<<<<<<<<<using get_head_shoulder_augmentation<<<<<<<<<") 
+    list_transforms = []
+    prob = random.random() 
+    if phase == 'train':
+        list_transforms.extend([
+            albu.augmentations.transforms.JpegCompression(
+                quality_lower=20, quality_upper=50,
+                always_apply=False, p=0.5),
+            albu.augmentations.transforms.RandomScale(
+                scale_limit=0.5, p=0.5),
+            #albu.PadIfNeeded(min_height=1080, min_width=1920, always_apply=True, border_mode=cv2.BORDER_CONSTANT, value=[0, 0, 0]),
+            #albu.augmentations.transforms.SmallestMaxSize(
+            #    max_size=width, always_apply=True),
+            #albu.augmentations.transforms.Rotate(
+            #    limit=15, interpolation=1, border_mode=cv2.BORDER_CONSTANT, 
+            #    value=[0, 0, 0], 
+            #    mask_value=[0, 0, 0], 
+            #    always_apply=False, p=1.0),    
+            albu.augmentations.transforms.RandomResizedCrop(
+                scale=(0.5, 1.2), ratio=(0.9, 1.2),
+                height=height,
+                width=width, p=1.0),
+            #albu.augmentations.transforms.RandomCrop(
+                #height=height,
+                #width=width, p=1.0),
+            #    height=int(1080 * prob),
+            #    width=int(1920 * prob), p=1.0),
+            albu.OneOf([
+                albu.RandomBrightnessContrast(
+                brightness_limit=0.3,
+                contrast_limit=0.3),
+                albu.RandomGamma(gamma_limit=(80, 120)),
+                albu.NoOp()
+            ]),
+            #albu.augmentations.transforms.Blur(blur_limit=5, p=0.5),
+            albu.OneOf([
+                albu.RGBShift(r_shift_limit=15, b_shift_limit=15, g_shift_limit=15),
+                albu.HueSaturationValue(hue_shift_limit=30, sat_shift_limit=30),
+                albu.NoOp(),
+            ]),
+            albu.HorizontalFlip(p=0.5),
+            #albu.VerticalFlip(p=0.5),
+            albu.augmentations.transforms.Cutout(num_holes=12, max_h_size=8, max_w_size=8, fill_value=0)
+        ])
+    if phase == 'test':
+        pass
+    return albu.Compose(
+        list_transforms,
+        bbox_params=albu.BboxParams(
+            format=bbox_format,
+            min_area=min_area,
+            min_visibility=min_visibility,
+            label_fields=['bbox_index']
+            ))

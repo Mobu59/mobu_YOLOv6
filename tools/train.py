@@ -31,7 +31,7 @@ def get_args_parser(add_help=True):
     parser.add_argument('--check-labels', action='store_true', help='check label files when initializing datasets')
     parser.add_argument('--output-dir', default='./runs/train', type=str, help='path to save outputs')
     parser.add_argument('--name', default='exp', type=str, help='experiment name, save to output_dir/name')
-    parser.add_argument('--dist_url', type=str, default="tcp://127.0.0.1:8888")
+    parser.add_argument('--dist_url', type=str, default="env://127.0.0.1:8888")
     parser.add_argument('--gpu_count', type=int, default=0)
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
 

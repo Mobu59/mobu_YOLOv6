@@ -5,10 +5,12 @@ import time
 from copy import deepcopy
 import os.path as osp
 
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 import numpy as np
 import torch
+import random
+from torch import nn
 from torch.cuda import amp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
@@ -52,7 +54,9 @@ class Trainer:
         self.max_epoch = args.epochs
         self.max_stepnum = len(self.train_loader)
         self.batch_size = args.batch_size
-        self.img_size = args.img_size
+        self.img_size = (args.img_size, args.img_size)
+        self.ori_size = args.img_size
+        self.multi_scale_range = 5
 
     # Training Process
     def train(self):
@@ -72,6 +76,7 @@ class Trainer:
         try:
             self.prepare_for_steps()
             for self.step, self.batch_data in self.pbar:
+                self.random_resize()
                 self.train_in_steps()
                 self.print_details()
         except Exception as _:
@@ -85,7 +90,47 @@ class Trainer:
 
     # Training loop for batchdata
     def train_in_steps(self):
-        images, targets = self.prepro_data(self.batch_data, self.device)
+        images, targets = self.prepro_data(self.batch_data, self.device) #做norm处理，将数据放到device上
+        images, targets = self.preprocess(images, targets, self.img_size) #多尺度
+        #vis
+        debug = 0
+        if debug:
+            from tqdm import trange
+            import cv2
+            import numpy as np
+            import ipdb
+            count = 0
+            for i in trange(5):
+                for ind, data in self.pbar:
+                    images, targets = self.prepro_data(data, self.device)
+                    images, targets = self.preprocess(images, targets, self.img_size)
+                    if ind == 10: #可视化10个batch的数据
+                        exit()
+                    for index, img in enumerate(images):
+                        img = img.cpu().numpy().transpose(1, 2, 0)
+                        h_, w_ = img.shape[:2]
+                        #image = img.copy() * 128.0 + 127.0
+                        image = img.copy() 
+                        ind = torch.where(targets[:, 0] == index)
+                        boxes = targets[ind]
+                        for i in range(boxes.shape[0]):
+                            bbox = boxes[i][2:6]
+                            cx = bbox[0]
+                            cy = bbox[1]
+                            w = bbox[2]
+                            h = bbox[3]
+                            name = int(boxes[i][1])
+                            x0 = cx - w * 0.5
+                            x1 = cx + w * 0.5
+                            y0 = cy - h * 0.5
+                            y1 = cy + h * 0.5
+                            #这里反算回去乘的值应该是最开始输入的图像尺寸
+                            #save_image = cv2.rectangle(image, (int(x0 * 416), int(y0 * 416)), (int(x1 * 416), int(y1 * 416)), 255, 2)
+                            cv2.rectangle(image, (int(x0), int(y0)), (int(x1), int(y1)), 255, 2)
+                        count += 1
+                        cv2.imwrite('/world/data-gpu-94/liyang/testshow/{}.jpg'.format(count), image)
+            ipdb.set_trace()
+                    
         # forward
         with amp.autocast(enabled=self.device != 'cpu'):
             preds = self.model(images)
@@ -125,7 +170,7 @@ class Trainer:
     def eval_model(self):
         results = eval.run(self.data_dict,
                            batch_size=self.batch_size // self.world_size * 2,
-                           img_size=self.img_size,
+                           img_size=self.img_size[0],
                            model=self.ema.ema,
                            dataloader=self.val_loader,
                            save_dir=self.save_dir,
@@ -155,7 +200,8 @@ class Trainer:
         self.mean_loss = torch.zeros(4, device=self.device)
         self.optimizer.zero_grad()
 
-        LOGGER.info(('\n' + '%10s' * 5) % ('Epoch', 'iou_loss', 'l1_loss', 'obj_loss', 'cls_loss'))
+        #LOGGER.info(('\n' + '%10s' * 5) % ('Epoch', 'iou_loss', 'l1_loss', 'obj_loss', 'cls_loss'))
+        LOGGER.info(('\n' + '%10s' * 6) % ('Epoch', 'iou_loss', 'l1_loss', 'obj_loss', 'cls_loss', 'img_size'))
         self.pbar = enumerate(self.train_loader)
         if self.main_process:
             self.pbar = tqdm(self.pbar, total=self.max_stepnum, ncols=NCOLS, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
@@ -164,9 +210,39 @@ class Trainer:
     def print_details(self):
         if self.main_process:
             self.mean_loss = (self.mean_loss * self.step + self.loss_items) / (self.step + 1)
-            self.pbar.set_description(('%10s' + '%10.4g' * 4) % (f'{self.epoch}/{self.max_epoch - 1}', \
-                                                                *(self.mean_loss)))
+            #self.pbar.set_description(('%10s' + '%10.4g' * 4) % (f'{self.epoch}/{self.max_epoch - 1}', \
+            #                                                    *(self.mean_loss)))
+            self.pbar.set_description(('%10s' + '%10.4g' * 5) % (f'{self.epoch}/{self.max_epoch - 1}', \
+                                                                *(self.mean_loss), self.img_size[0]))
 
+    def random_resize(self):
+        if (self.step + 1) % 10 == 0:
+            self.img_size = self.generate_new_input_size(self.ori_size, self.multi_scale_range)
+
+    def generate_new_input_size(self, input_size, scale_range):
+        if isinstance(input_size, int):
+            input_size = (input_size, input_size)
+        ratio = input_size[0] / input_size[1]    
+        min_size = int(input_size[0] / 32 ) - scale_range
+        max_size = int(input_size[0] / 32 ) + scale_range
+        size_range = (min_size, max_size)
+        size = random.randint(*size_range)
+        new_input_size = (int(32 * size), 32 * int(size * ratio))
+        return new_input_size
+
+    def preprocess(self, inputs, targets, tsize):
+        if isinstance(tsize, int):
+            tsize = (tsize, tsize)
+        scale_y = tsize[0] / inputs.shape[2]
+        scale_x = tsize[1] / inputs.shape[3]
+        if scale_x != 1 or scale_y != 1:
+            inputs = nn.functional.interpolate(
+                inputs, size=tsize, mode="bilinear", align_corners=False
+            )
+            targets[..., 2::2] = targets[..., 2::2] * scale_x
+            targets[..., 3::2] = targets[..., 3::2] * scale_y
+        return inputs, targets    
+        
     # Empty cache if training finished
     def train_after_loop(self):
         if self.main_process:
@@ -205,21 +281,24 @@ class Trainer:
         # create train dataloader
         train_loader = create_dataloader(train_path, args.img_size, args.batch_size // args.world_size, grid_size,
                                          hyp=dict(cfg.data_aug), augment=True, rect=False, rank=args.local_rank,
+                                         #hyp=dict(cfg.data_aug), augment=False, rect=False, rank=args.local_rank,
                                          workers=args.workers, shuffle=True, check_images=args.check_images,
-                                         check_labels=args.check_labels, class_names=class_names, task='train')[0]
+                                         check_labels=args.check_labels, data_dict=data_dict, task='train')[0]
         # create val dataloader
         val_loader = None
         if args.rank in [-1, 0]:
             val_loader = create_dataloader(val_path, args.img_size, args.batch_size // args.world_size * 2, grid_size,
                                            hyp=dict(cfg.data_aug), rect=True, rank=-1, pad=0.5,
                                            workers=args.workers, check_images=args.check_images,
-                                           check_labels=args.check_labels, class_names=class_names, task='val')[0]
+                                           check_labels=args.check_labels, data_dict=data_dict, task='val')[0]
 
         return train_loader, val_loader
 
     @staticmethod
     def prepro_data(batch_data, device):
-        images = batch_data[0].to(device, non_blocking=True).float() / 255
+        #images = batch_data[0].to(device, non_blocking=True).float() / 255
+        #images = (batch_data[0].to(device, non_blocking=True).float() - 127.0) / 128.0 
+        images = batch_data[0].to(device, non_blocking=True).float()
         targets = batch_data[1].to(device)
         return images, targets
 

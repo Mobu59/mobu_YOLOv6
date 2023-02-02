@@ -5,6 +5,7 @@ import os.path as osp
 import math
 
 from tqdm import tqdm
+import time
 
 import numpy as np
 import cv2
@@ -21,7 +22,7 @@ from yolov6.utils.nms import non_max_suppression
 class Inferer:
     def __init__(self, source, weights, device, yaml, img_size, half):
         import glob
-        from yolov6.data.datasets import IMG_FORMATS
+        from yolov6.data.datasets import IMG_FORMATS, VID_FORMATS
 
         self.__dict__.update(locals())
 
@@ -48,55 +49,75 @@ class Inferer:
         # Load data
         if os.path.isdir(source):
             img_paths = sorted(glob.glob(os.path.join(source, '*.*')))  # dir
+        elif source.endswith((".json", ".txt")):
+            with open(source, "r") as f:
+                lines = f.readlines()
+                img_paths = []
+                for line in lines:
+                    line = line.strip().split("\t")
+                    k = line[0]
+                    img_paths.append(k)
         elif os.path.isfile(source):
             img_paths = [source]  # files
         else:
             raise Exception(f'Invalid path: {source}')
-        self.img_paths = [img_path for img_path in img_paths if img_path.split('.')[-1].lower() in IMG_FORMATS]
+        self.img_paths = [img_path for img_path in img_paths if img_path.split('.')[-1].lower() in IMG_FORMATS or img_path.split('.')[-1].lower() in VID_FORMATS]
 
     def infer(self, conf_thres, iou_thres, classes, agnostic_nms, max_det, save_dir, save_txt, save_img, hide_labels, hide_conf):
         ''' Model Inference and results visualization '''
+        label_save_path = osp.join(save_dir, 'labels', 'labels.txt')
+        img_save_dir = osp.join(save_dir, 'images')
+        if not osp.exists(img_save_dir):
+            os.mkdir(img_save_dir, 0o777)
+        with open(label_save_path, 'w') as f:
+            for img_path in tqdm(self.img_paths):
+                if img_path.endswith(".mp4"):
+                    self.imageflow_demo(img_path, conf_thres, iou_thres, classes, agnostic_nms, max_det)
+                else:    
+                    img, img_src = self.precess_image(img_path, self.img_size, self.stride, self.half)
+                    img = img.to(self.device)
+                    if len(img.shape) == 3:
+                        img = img[None]
+                        # expand for batch dim
+                    pred_results = self.model(img)
+                    det = non_max_suppression(pred_results, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)[0]
 
-        for img_path in tqdm(self.img_paths):
-            img, img_src = self.precess_image(img_path, self.img_size, self.stride, self.half)
-            img = img.to(self.device)
-            if len(img.shape) == 3:
-                img = img[None]
-                # expand for batch dim
-            pred_results = self.model(img)
-            det = non_max_suppression(pred_results, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)[0]
+                    save_path = osp.join(img_save_dir, osp.basename(img_path))  # im.jpg
+                    #txt_path = osp.join(save_dir, 'labels', osp.splitext(osp.basename(img_path).split('.'))[0])
 
-            save_path = osp.join(save_dir, osp.basename(img_path))  # im.jpg
-            txt_path = osp.join(save_dir, 'labels', osp.basename(img_path).split('.')[0])
+                    gn = torch.tensor(img_src.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+                    img_ori = img_src
 
-            gn = torch.tensor(img_src.shape)[[1, 0, 1, 0]]  # normalization gain whwh
-            img_ori = img_src
+                    # check image and font
+                    assert img_ori.data.contiguous, 'Image needs to be contiguous. Please apply to input images with np.ascontiguousarray(im).'
+                    self.font_check()
 
-            # check image and font
-            assert img_ori.data.contiguous, 'Image needs to be contiguous. Please apply to input images with np.ascontiguousarray(im).'
-            self.font_check()
+                    if len(det):
+                        det[:, :4] = self.rescale(img.shape[2:], det[:, :4], img_src.shape).round()
 
-            if len(det):
-                det[:, :4] = self.rescale(img.shape[2:], det[:, :4], img_src.shape).round()
+                        for *xyxy, conf, cls in reversed(det):
+                            if save_txt:  # Write to file
+                                #xywh = (self.box_convert(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+                                #line = (cls, *xywh, conf)
+                                line = (img_path, float(conf.item()), *xyxy, float(cls.item()))
+                                x0 = xyxy[0]
+                                y0 = xyxy[1]
+                                x1 = xyxy[2]
+                                y1 = xyxy[3]
+                                f.write("{:s} {:.4f} {:.1f} {:.1f} {:.1f} {:.1f} {}".format(img_path, conf, x0, y0, x1, y1, cls) + "\n")
+                            if save_img:
+                                class_num = int(cls)  # integer class
+                                label = None if hide_labels else (self.class_names[class_num] if hide_conf else f'{self.class_names[class_num]} {conf:.2f}')
 
-                for *xyxy, conf, cls in reversed(det):
-                    if save_txt:  # Write to file
-                        xywh = (self.box_convert(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                        line = (cls, *xywh, conf)
-                        with open(txt_path + '.txt', 'a') as f:
-                            f.write(('%g ' * len(line)).rstrip() % line + '\n')
+                                self.plot_box_and_label(img_ori, max(round(sum(img_ori.shape) / 2 * 0.003), 2), xyxy, label, color=self.generate_colors(class_num, True))
 
-                    if save_img:
-                        class_num = int(cls)  # integer class
-                        label = None if hide_labels else (self.class_names[class_num] if hide_conf else f'{self.class_names[class_num]} {conf:.2f}')
+                        img_src = np.asarray(img_ori)
 
-                        self.plot_box_and_label(img_ori, max(round(sum(img_ori.shape) / 2 * 0.003), 2), xyxy, label, color=self.generate_colors(class_num, True))
-
-                img_src = np.asarray(img_ori)
-
-                # Save results (image with detections)
-                if save_img:
-                    cv2.imwrite(save_path, img_src)
+                        # Save results (image with detections)
+                        if save_img:
+                            cv2.imwrite(save_path, img_src)
+                    else:       
+                        print("11111")
 
     @staticmethod
     def precess_image(path, img_size, stride, half):
@@ -109,10 +130,13 @@ class Inferer:
         image = letterbox(img_src, img_size, stride=stride)[0]
 
         # Convert
-        image = image.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        #image = image.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        image = image.transpose((2, 0, 1)) # HWC to CHW
         image = torch.from_numpy(np.ascontiguousarray(image))
         image = image.half() if half else image.float()  # uint8 to fp16/32
-        image /= 255  # 0 - 255 to 0.0 - 1.0
+        #image /= 255  # 0 - 255 to 0.0 - 1.0
+        image = (image - 127.0) / 128.0
+        image = image
 
         return image, img_src
 
@@ -132,6 +156,80 @@ class Inferer:
         boxes[:, 3].clamp_(0, target_shape[0])  # y2
 
         return boxes
+
+    def imageflow_demo(self, img_path, conf_thres, iou_thres, classes, agnostic_nms, max_det):
+        cap = cv2.VideoCapture(img_path)
+        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        vis_folder = "/world/data-gpu-94/liyang/Github_projects/YOLOv6/runs/inference/exp"
+        print("视频的帧率为{}".format(fps))
+        current_date = time.strftime("%Y_%m_%d")
+        save_folder = osp.join(vis_folder, f"{current_date}_videos")
+        os.makedirs(save_folder, exist_ok=True)
+        save_path = osp.join(save_folder, img_path.split("/")[-1])
+        s = fps / 10.0
+        vid_writer = cv2.VideoWriter(
+            save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps/s, (int(width), int(height))
+        )
+        cnt = 1
+        keep = []
+        print("Inferencing input video, this might take a minute")
+        while cnt <= 6000:
+            ret_val, frame = cap.read()
+            if ret_val:
+                if fps > 20:
+                    keep.append(frame)
+                    if cnt % 5 == 0:
+                        for i, frame in enumerate(keep):
+                            if i == 0 or i == 3:
+                                img_src = frame
+                                img = letterbox(img_src, self.img_size, stride=self.stride)[0]
+                                img = img.transpose((2, 0, 1))
+                                img = torch.from_numpy(np.ascontiguousarray(img))
+                                img = img.half() if self.half else img.float()
+                                img = (img - 127.0) / 128.0
+                                img = img.to(self.device)
+                                if len(img.shape) == 3:
+                                    img = img[None]
+                                pred_results = self.model(img)    
+                                det = non_max_suppression(pred_results, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)[0]
+                                gn = torch.tensor(img_src.shape)[[1, 0, 1, 0]]
+                                img_ori = img_src
+                                if len(det):
+                                    det[:, :4] = self.rescale(img.shape[2:], det[:, :4], img_src.shape).round()
+                                    for *xyxy, conf, cls in reversed(det):
+                                        x0 = xyxy[0]
+                                        y0 = xyxy[1]
+                                        x1 = xyxy[2]
+                                        y1 = xyxy[3]
+                                        cv2.rectangle(img_src, (int(x0), int(y0)), (int(x1), int(y1)), (0, 255, 255), 2)
+                                vid_writer.write(img_src)
+                        keep = []
+                else:
+                    img_src = frame
+                    img = letterbox(img_src, self.img_size, stride=self.stride)[0]
+                    img = img.transpose((2, 0, 1))
+                    img = torch.from_numpy(np.ascontiguousarray(img))
+                    img = img.half() if self.half else img.float()
+                    #img = (img - 127.0) / 128.0
+                    img = img.to(self.device)
+                    if len(img.shape) == 3:
+                        img = img[None]
+                    pred_results = self.model(img)    
+                    det = non_max_suppression(pred_results, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)[0]
+                    gn = torch.tensor(img_src.shape)[[1, 0, 1, 0]]
+                    img_ori = img_src
+                    if len(det):
+                        det[:, :4] = self.rescale(img.shape[2:], det[:, :4], img_src.shape).round()
+                        for *xyxy, conf, cls in reversed(det):
+                            x0 = xyxy[0]
+                            y0 = xyxy[1]
+                            x1 = xyxy[2]
+                            y1 = xyxy[3]
+                            cv2.rectangle(img_src, (int(x0), int(y0)), (int(x1), int(y1)), (0, 255, 255), 2)
+                    vid_writer.write(img_src)
+            cnt += 1
 
     def check_img_size(self, img_size, s=32, floor=0):
         """Make sure image size is a multiple of stride s in each dimension, and return a new shape list of image."""

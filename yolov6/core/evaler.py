@@ -84,7 +84,9 @@ class Evaler:
             t1 = time_sync()
             imgs = imgs.to(self.device, non_blocking=True)
             imgs = imgs.half() if self.half else imgs.float()
-            imgs /= 255
+            #imgs /= 255
+            #imgs = (imgs - 127.0) / 128.0
+            imgs = imgs
             self.speed_result[1] += time_sync() - t1  # pre-process time
 
             # Inference
@@ -189,7 +191,8 @@ class Evaler:
                 continue
             path, shape = Path(paths[i]), shapes[i][0]
             self.scale_coords(imgs[i].shape[1:], pred[:, :4], shape, shapes[i][1])
-            image_id = int(path.stem) if path.stem.isnumeric() else path.stem
+            #image_id = int(path.stem) if path.stem.isnumeric() else path.stem
+            image_id = path.stem
             bboxes = self.box_convert(pred[:, 0:4])
             bboxes[:, :2] -= bboxes[:, 2:] / 2
             cls = pred[:, 5]

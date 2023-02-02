@@ -6,12 +6,13 @@
 import os
 from torch.utils.data import dataloader, distributed
 
-from .datasets import TrainValDataset
+#from .datasets import TrainValDataset
+from .test_dataset import TrainValDataset
 from yolov6.utils.events import LOGGER
 from yolov6.utils.torch_utils import torch_distributed_zero_first
 
 
-def create_dataloader(path, img_size, batch_size, stride, hyp=None, augment=False, check_images=False, check_labels=False, pad=0.0, rect=False, rank=-1, workers=8, shuffle=False,class_names=None, task='Train'):
+def create_dataloader(path, img_size, batch_size, stride, hyp=None, augment=False, check_images=False, check_labels=False, pad=0.0, rect=False, rank=-1, workers=8, shuffle=False,data_dict=None, task='Train'):
     '''Create general dataloader.
 
     Returns dataloader and dataset
@@ -20,15 +21,18 @@ def create_dataloader(path, img_size, batch_size, stride, hyp=None, augment=Fals
         LOGGER.warning('WARNING: --rect is incompatible with DataLoader shuffle, setting shuffle=False')
         shuffle = False
     with torch_distributed_zero_first(rank):
-        dataset = TrainValDataset(path, img_size, batch_size,
+        dataset = TrainValDataset(path, 
+                                  img_size,
+                                  batch_size,
                                   augment=augment,
                                   hyp=hyp,
                                   rect=rect,
                                   check_images=check_images,
+                                  check_labels=check_labels,
                                   stride=int(stride),
                                   pad=pad,
                                   rank=rank,
-                                  class_names=class_names,
+                                  data_dict=data_dict,
                                   task=task)
 
     batch_size = min(batch_size, len(dataset))

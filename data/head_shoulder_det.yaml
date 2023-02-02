@@ -1,0 +1,11 @@
+# head_shoulder_det
+train: "/world/data-gpu-94/liyang/pedDetection/head_detection/train.v3.10000.expansion.json"
+val: "/world/data-gpu-94/liyang/pedDetection/head_detection/val.v2.expansion.test.v2.json"
+test: "/world/data-gpu-94/ped_detection_data/biped.v8.head.mix.shuf.test.json"
+# number of classes
+nc: 1
+
+# class names
+names: [ '0', ]
+#train: "/world/data-gpu-94/liyang/pedDetection/head_detection/val.v2.expansion.test.json"
+#train: "/world/data-gpu-94/liyang/pedDetection/head_detection/train.v2.expansion.json"

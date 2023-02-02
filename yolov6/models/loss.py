@@ -42,6 +42,14 @@ class ComputeLoss:
         self.l1_loss = nn.L1Loss(reduction="none")
         self.bcewithlog_loss = nn.BCEWithLogitsLoss(reduction="none")
         self.iou_loss = IOUloss(iou_type=iou_type, reduction="none")
+    
+    def focal_loss(self, pred, gt):
+        pos_inds = gt.eq(1).float()
+        neg_inds = gt.eq(0).float()
+        pos_loss = torch.log(pred + 1e-5) * torch.pow(1 - pred, 2) * pos_inds * 0.25
+        neg_loss = torch.log(1 - pred + 1e-5) * torch.pow(pred, 2) * neg_inds * 0.75
+        loss = -(pos_loss + neg_loss)
+        return loss
 
     def __call__(
         self,
@@ -87,7 +95,8 @@ class ComputeLoss:
                 fg_mask = outputs.new_zeros(total_num_anchors).bool()
             else:
 
-                gt_bboxes_per_image = targets[batch_idx, :num_gt, 1:5].mul_(gt_bboxes_scale)
+                #gt_bboxes_per_image = targets[batch_idx, :num_gt, 1:5].mul_(gt_bboxes_scale)
+                gt_bboxes_per_image = targets[batch_idx, :num_gt, 1:5]
                 gt_classes = targets[batch_idx, :num_gt, 0]
                 bboxes_preds_per_image = bbox_preds[batch_idx]
                 cls_preds_per_image = cls_preds[batch_idx]
@@ -191,6 +200,7 @@ class ComputeLoss:
         loss_l1 += (self.l1_loss(bbox_preds_org.view(-1, 4)[fg_masks], l1_targets)).sum() / num_fg
 
         loss_obj += (self.bcewithlog_loss(obj_preds.view(-1, 1), obj_targets*1.0)).sum() / num_fg
+        #loss_obj += (self.focal_loss(obj_preds.sigmoid().view(-1, 1), obj_targets)).sum() / num_fg
         loss_cls += (self.bcewithlog_loss(cls_preds.view(-1, num_classes)[fg_masks], cls_targets)).sum() / num_fg
 
         total_losses = self.reg_weight * loss_iou + loss_l1 + loss_obj + loss_cls
