@@ -6,7 +6,7 @@ python -m torch.distributed.launch --nproc_per_node 4 tools/train.py \
 --fuse_ab \
 --device=3,4,5,7 \
 --img-size=416 \
---epochs=50 
+--epochs=100 
 #--conf=configs/yolov6t_head_shoulder_det.py \
 #--data=data/head_det.yaml \
 #--conf=/world/data-gpu-94/liyang/Github_projects/YOLOv6/configs/yolov6n_head_shoulder_det.py \

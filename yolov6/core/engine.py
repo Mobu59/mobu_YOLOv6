@@ -305,7 +305,8 @@ class Trainer:
         self.evaluate_results = (0, 0) # AP50, AP50_95
         
         self.compute_loss = ComputeLoss(num_classes=self.data_dict['nc'],
-                                        ori_img_size=self.img_size,
+                                        #ori_img_size=self.img_size,
+                                        ori_img_size=self.ori_size,
                                         warmup_epoch=self.cfg.model.head.atss_warmup_epoch,
                                         use_dfl=self.cfg.model.head.use_dfl,
                                         reg_max=self.cfg.model.head.reg_max,
@@ -314,7 +315,8 @@ class Trainer:
 
         if self.args.fuse_ab:
             self.compute_loss_ab = ComputeLoss_ab(num_classes=self.data_dict['nc'],
-                                        ori_img_size=self.img_size,
+                                        #ori_img_size=self.img_size,
+                                        ori_img_size=self.ori_size,
                                         warmup_epoch=0,
                                         use_dfl=False,
                                         reg_max=0,
@@ -327,7 +329,8 @@ class Trainer:
                 Loss_distill_func = ComputeLoss_distill
 
             self.compute_loss_distill = Loss_distill_func(num_classes=self.data_dict['nc'],
-                                                        ori_img_size=self.img_size,
+                                                        #ori_img_size=self.img_size,
+                                                        ori_img_size=self.ori_size,
                                                         fpn_strides=self.cfg.model.head.strides,
                                                         warmup_epoch=self.cfg.model.head.atss_warmup_epoch,
                                                         use_dfl=self.cfg.model.head.use_dfl,
