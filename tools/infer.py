@@ -19,6 +19,8 @@ def get_args_parser(add_help=True):
     parser = argparse.ArgumentParser(description='YOLOv6 PyTorch Inference.', add_help=add_help)
     parser.add_argument('--weights', type=str, default='weights/yolov6s.pt', help='model path(s) for inference.')
     parser.add_argument('--source', type=str, default='data/images', help='the source path, e.g. image-file/dir.')
+    parser.add_argument('--webcam', action='store_true', help='whether to use webcam.')
+    parser.add_argument('--webcam-addr', type=str, default='0', help='the web camera address, local camera or rtsp address.')
     parser.add_argument('--yaml', type=str, default='data/coco.yaml', help='data yaml file.')
     parser.add_argument('--img-size', type=int, default=288, help='the image-size(h,w) in inference size.')
     parser.add_argument('--conf-thres', type=float, default=0.35, help='confidence threshold for inference.')
@@ -26,7 +28,9 @@ def get_args_parser(add_help=True):
     parser.add_argument('--max-det', type=int, default=1000, help='maximal inferences per image.')
     parser.add_argument('--device', default='0', help='device to run our model i.e. 0 or 0,1,2,3 or cpu.')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt.')
-    parser.add_argument('--save-img', action='store_false', help='save visuallized inference results.')
+    parser.add_argument('--not-save-img', action='store_true', help='do not save visuallized inference results.')
+    parser.add_argument('--save-dir', type=str, help='directory to save predictions in. See --save-txt.')
+    parser.add_argument('--view-img', action='store_true', help='show inference results')
     parser.add_argument('--classes', nargs='+', type=int, help='filter by classes, e.g. --classes 0, or --classes 0 2 3.')
     parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS.')
     parser.add_argument('--project', default='runs/inference', help='save inference results to project/name.')
@@ -39,17 +43,22 @@ def get_args_parser(add_help=True):
     LOGGER.info(args)
     return args
 
+
 @torch.no_grad()
 def run(weights=osp.join(ROOT, 'yolov6s.pt'),
         source=osp.join(ROOT, 'data/images'),
+        webcam=False,
+        webcam_addr=0,
         yaml=None,
         img_size=640,
-        conf_thres=0.25,
+        conf_thres=0.4,
         iou_thres=0.45,
         max_det=1000,
         device='',
         save_txt=False,
-        save_img=True,
+        not_save_img=False,
+        save_dir=None,
+        view_img=True,
         classes=None,
         agnostic_nms=False,
         project=osp.join(ROOT, 'runs/inference'),
@@ -58,10 +67,7 @@ def run(weights=osp.join(ROOT, 'yolov6s.pt'),
         hide_conf=False,
         half=False,
         ):
-    """ Inference process
-
-    This function is the main process of inference, supporting image files or dirs containing images.
-
+    """ Inference process, supporting inference on one image file or directory which containing images.
     Args:
         weights: The path of model.pt, e.g. yolov6s.pt
         source: Source path, supporting image files or dirs containing images.
@@ -72,7 +78,7 @@ def run(weights=osp.join(ROOT, 'yolov6s.pt'),
         max_det: Maximal detections per image, e.g. 1000
         device: Cuda device, e.e. 0, or 0,1,2,3 or cpu
         save_txt: Save results to *.txt
-        save_img: Save visualized inference results
+        not_save_img: Do not save visualized inference results
         classes: Filter by class: --class 0, or --class 0 2 3
         agnostic_nms: Class-agnostic NMS
         project: Save results to project/name
@@ -94,15 +100,16 @@ def run(weights=osp.join(ROOT, 'yolov6s.pt'),
         os.makedirs(save_dir)
     else:
         LOGGER.warning('Save directory already existed')
-    if save_txt:
-        if not osp.exists(save_txt_path):
-            os.makedirs(save_txt_path)
+    #if save_txt:
+    #    save_txt_path = osp.join(save_dir, 'labels')
+    #    if not osp.exists(save_txt_path):
+    #        os.makedirs(save_txt_path)
 
     # Inference
-    inferer = Inferer(source, weights, device, yaml, img_size, half)
-    inferer.infer(conf_thres, iou_thres, classes, agnostic_nms, max_det, save_dir, save_txt, save_img, hide_labels, hide_conf)
+    inferer = Inferer(source, webcam, webcam_addr, weights, device, yaml, img_size, half)
+    inferer.infer(conf_thres, iou_thres, classes, agnostic_nms, max_det, save_dir, save_txt, not not_save_img, hide_labels, hide_conf, view_img)
 
-    if save_txt or save_img:
+    if save_txt or not not_save_img:
         LOGGER.info(f"Results saved to {save_dir}")
 
 
