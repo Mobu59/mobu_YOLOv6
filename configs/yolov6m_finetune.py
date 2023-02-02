@@ -1,7 +1,8 @@
 # YOLOv6m model
 model = dict(
     type='YOLOv6m',
-    pretrained='weights/yolov6m.pt',
+    #pretrained='weights/yolov6m.pt',
+    pretrained='/world/data-gpu-94/liyang/Github_projects/YOLOv6/pretrain_weights/yolov6m.pt',
     depth_multiple=0.60,  
     width_multiple=0.75,
     backbone=dict(
@@ -56,11 +57,15 @@ data_aug = dict(
     hsv_s=0.664,
     hsv_v=0.464,
     degrees=0.373,
-    translate=0.245,
-    scale=0.898,
+    #translate=0.245,
+    translate=0.1,
+    #scale=0.898,
+    scale=0.2,
     shear=0.602,
     flipud=0.00856,
     fliplr=0.5,
-    mosaic=1.0,
-    mixup=0.243,
+    #mosaic=1.0,
+    #mixup=0.243,
+    mosaic=0.0,
+    mixup=0.0,
 )
