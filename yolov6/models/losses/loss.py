@@ -178,7 +178,8 @@ class ComputeLoss:
             targets_list[int(item[0])].append(item[1:])
         max_len = max((len(l) for l in targets_list))
         targets = torch.from_numpy(np.array(list(map(lambda l:l + [[-1,0,0,0,0]]*(max_len - len(l)), targets_list)))[:,1:,:]).to(targets.device)
-        batch_target = targets[:, :, 1:5].mul_(scale_tensor)
+        #batch_target = targets[:, :, 1:5].mul_(scale_tensor)
+        batch_target = targets[:, :, 1:5] #因为开启了多尺度训练，所以这里也需要将标签转化为绝对值，否则的话模型学习到的只是相对于一个尺度的信息。
         targets[..., 1:] = xywh2xyxy(batch_target)
         return targets
 
