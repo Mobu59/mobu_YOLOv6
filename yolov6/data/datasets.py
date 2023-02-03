@@ -604,6 +604,14 @@ class LoadData:
             p = str(Path(path).resolve())  # os-agnostic absolute path
             if os.path.isdir(p):
                 files = sorted(glob.glob(os.path.join(p, '**/*.*'), recursive=True))  # dir
+            elif p.endswith(".json"):
+                with open(p, "r") as f:
+                    lines = f.readlines()
+                    files = []
+                    for line in lines:
+                        line = line.strip().split("\t")
+                        k = line[0]
+                        files.append(k)
             elif os.path.isfile(p):
                 files = [p]  # files
             else:

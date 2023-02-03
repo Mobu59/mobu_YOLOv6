@@ -208,7 +208,7 @@ class Trainer:
 
     def eval_and_save(self):
         remaining_epochs = self.max_epoch - self.epoch
-        eval_interval = self.args.eval_interval if remaining_epochs > self.args.heavy_eval_range else 3
+        eval_interval = self.args.eval_interval if remaining_epochs > self.args.heavy_eval_range else 3 
         is_val_epoch = (not self.args.eval_final_only or (remaining_epochs == 1)) and (self.epoch % eval_interval == 0)
         if self.main_process:
             self.ema.update_attr(self.model, include=['nc', 'names', 'stride']) # update attributes for ema model
@@ -354,8 +354,8 @@ class Trainer:
         self.mean_loss = torch.zeros(self.loss_num, device=self.device)
         self.optimizer.zero_grad()
 
-        #LOGGER.info(('\n' + '%10s' * 6) % ('Epoch', 'iou_loss', 'l1_loss', 'obj_loss', 'cls_loss', 'img_size'))
-        LOGGER.info(('\n' + '%10s' * (self.loss_num + 1)) % (*self.loss_info,))
+        #LOGGER.info(('\n' + '%10s' * (self.loss_num + 1)) % (*self.loss_info,))
+        LOGGER.info(('\n' + '%10s' * (self.loss_num + 2)) % (*self.loss_info, 'img_size'))
         self.pbar = enumerate(self.train_loader)
         if self.main_process:
             self.pbar = tqdm(self.pbar, total=self.max_stepnum, ncols=NCOLS, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
@@ -364,10 +364,10 @@ class Trainer:
     def print_details(self):
         if self.main_process:
             self.mean_loss = (self.mean_loss * self.step + self.loss_items) / (self.step + 1)
-            self.pbar.set_description(('%10s' + '%10.4g' * self.loss_num) % (f'{self.epoch}/{self.max_epoch - 1}', \
-                                                                *(self.mean_loss)))
-            #self.pbar.set_description(('%10s' + '%10.4g' * 5) % (f'{self.epoch}/{self.max_epoch - 1}', \
-            #                                                    *(self.mean_loss), self.img_size[0]))
+            #self.pbar.set_description(('%10s' + '%10.4g' * self.loss_num) % (f'{self.epoch}/{self.max_epoch - 1}', \
+            #                                                    *(self.mean_loss)))
+            self.pbar.set_description(('%10s' + '%10.4g' * (self.loss_num + 1)) % (f'{self.epoch}/{self.max_epoch - 1}', \
+                                                                *(self.mean_loss), self.img_size[0]))
 
     def random_resize(self):
         if (self.step + 1) % 10 == 0:
