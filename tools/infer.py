@@ -29,6 +29,7 @@ def get_args_parser(add_help=True):
     parser.add_argument('--device', default='0', help='device to run our model i.e. 0 or 0,1,2,3 or cpu.')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt.')
     parser.add_argument('--not-save-img', action='store_true', help='do not save visuallized inference results.')
+    parser.add_argument('--save_as_video', action='store_true', help='save consequent imgs as video.')
     parser.add_argument('--save-dir', type=str, help='directory to save predictions in. See --save-txt.')
     parser.add_argument('--view-img', action='store_true', help='show inference results')
     parser.add_argument('--classes', nargs='+', type=int, help='filter by classes, e.g. --classes 0, or --classes 0 2 3.')
@@ -57,6 +58,7 @@ def run(weights=osp.join(ROOT, 'yolov6s.pt'),
         device='',
         save_txt=False,
         not_save_img=False,
+        save_as_video=False,
         save_dir=None,
         view_img=True,
         classes=None,
@@ -96,7 +98,7 @@ def run(weights=osp.join(ROOT, 'yolov6s.pt'),
         os.mkdir(save_txt_path, 0o777)
     #else:
     #    save_txt_path = save_dir
-    if (save_img or save_txt) and not osp.exists(save_dir):
+    if (not not_save_img or save_txt) and not osp.exists(save_dir):
         os.makedirs(save_dir)
     else:
         LOGGER.warning('Save directory already existed')
@@ -107,7 +109,7 @@ def run(weights=osp.join(ROOT, 'yolov6s.pt'),
 
     # Inference
     inferer = Inferer(source, webcam, webcam_addr, weights, device, yaml, img_size, half)
-    inferer.infer(conf_thres, iou_thres, classes, agnostic_nms, max_det, save_dir, save_txt, not not_save_img, hide_labels, hide_conf, view_img)
+    inferer.infer(conf_thres, iou_thres, classes, agnostic_nms, max_det, save_dir, save_txt, not not_save_img, save_as_video, hide_labels, hide_conf, view_img)
 
     if save_txt or not not_save_img:
         LOGGER.info(f"Results saved to {save_dir}")
@@ -119,5 +121,6 @@ def main(args):
 
 if __name__ == "__main__":
     args = get_args_parser()
-    args.img_size = [288, 512]
+    #args.img_size = [288, 512]
+    args.img_size = [416, 736]
     main(args)
