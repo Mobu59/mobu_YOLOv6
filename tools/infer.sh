@@ -1,12 +1,17 @@
 #!/bin/bash
 python tools/infer.py \
---weights runs/train/exp1/weights/last_ckpt.pt \
---source /world/data-gpu-94/liyang/shelf_test_imgs/shelf_videos/smart_shelf_videos/20230201_videos/Fps10_imgs.json \
+--weights /world/data-gpu-94/liyang/Github_projects/YOLOv6/runs/train/head_hs_weights/weights/yolov6n_head_det_nonorm/last_ckpt.pt \
+--yaml data/head_det.yaml \
+--source /world/data-gpu-94/liyang/pedDetection/test_data/daily_data/20230214_test_data.json \
 --save-txt \
---save_as_video \
---not-save-img \
---hide-labels
+#--not-save-img \
+#--save_as_video \
+#--hide-labels
 
+
+#--weights runs/train/hands_goods_det.v4/weights/epoch_50_ckpt.pt \
+#--yaml data/hands_goods_det.yaml \
+#--source /world/data-gpu-94/liyang/shelf_test_imgs/shelf_videos/smart_shelf_videos/20230201_videos/Fps10_imgs_20230208.json \
 
 #--weights runs/train/exp/weights/yolov6t_head_det.v1/last_ckpt.pt \
 #--source /world/data-gpu-94/liyang/pedDetection/head_detection/badcase/ped_head.badcase.gt.expansion.json \

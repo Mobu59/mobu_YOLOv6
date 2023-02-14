@@ -24,7 +24,8 @@ from .data_augment import (
     mixup,
     random_affine,
     mosaic_augmentation,
-    get_head_shoulder_augmentation
+    get_head_shoulder_augmentation,
+    get_hands_goods_augmentation
 )
 from yolov6.utils.events import LOGGER
 
@@ -68,7 +69,8 @@ class TrainValDataset(Dataset):
         #self.img_paths, self.labels, self.img_info = self.get_imgs_labels_from_json_v0(self.img_dir)
         self.datalines = self._parse_dataset(self.img_dir)
         self.albu = True
-        self.aug_domain = 'head_shoulder_det'
+        #self.aug_domain = 'head_shoulder_det'
+        self.aug_domain = 'hands_goods_det'
         if self.rect:
             shapes = [self.img_info[p]["shape"] for p in self.img_paths]
             self.shapes = np.array(shapes, dtype=np.float64)
@@ -100,6 +102,8 @@ class TrainValDataset(Dataset):
         )
         if self.aug_domain == 'head_shoulder_det':
             self.albu_aug = get_head_shoulder_augmentation('train', width=self.img_size, height=self.img_size, min_area=64, min_visibility=0.7)
+        elif self.aug_domain == 'hands_goods_det':
+            self.albu_aug = get_hands_goods_augmentation('train', width=self.img_size, height=self.img_size, min_area=100, min_visibility=0.7)
 
     def __len__(self):
         """Get the length of dataset"""
@@ -160,7 +164,7 @@ class TrainValDataset(Dataset):
             try:
                 t = self.albu_aug(**anno)
             except Exception as e:
-                print(e, '11111')
+                print(e)
                 t = anno
             aug_img = t['image']    
             aug_label = []
@@ -188,7 +192,7 @@ class TrainValDataset(Dataset):
             #过滤宽高比大于阈值的框    
             save_boxes = []    
             for i, k in enumerate(labels):
-                if max(k[3] / (k[4] + 1e-7), k[4] / (k[3] + 1e-7)) > 1.6:
+                if max(k[3] / (k[4] + 1e-7), k[4] / (k[3] + 1e-7)) > 10:
                     x0 = int(k[1] - k[3] / 2)
                     y0 = int(k[2] - k[4] / 2)
                     x1 = int(k[1] + k[3] / 2)
@@ -204,7 +208,7 @@ class TrainValDataset(Dataset):
                 if len(labels):
                     labels_out[:, 1:] = torch.from_numpy(labels)
             except Exception as e:
-                print(e, '222222')
+                print(e)
             # Convert
             img = aug_img.transpose((2, 0, 1))  # HWC to CHW, For our self-use framework, do not need convert BGR to RGB
             img = np.ascontiguousarray(img)

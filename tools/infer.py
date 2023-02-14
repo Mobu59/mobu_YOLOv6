@@ -121,6 +121,6 @@ def main(args):
 
 if __name__ == "__main__":
     args = get_args_parser()
-    #args.img_size = [288, 512]
-    args.img_size = [416, 736]
+    args.img_size = [288, 512]
+    #args.img_size = [416, 736]
     main(args)

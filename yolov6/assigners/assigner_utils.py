@@ -31,16 +31,16 @@ def select_candidates_in_gts(xy_centers, gt_bboxes, eps=1e-9):
     Return:
         (Tensor): shape(bs, n_max_boxes, num_total_anchors)
     """
-    n_anchors = xy_centers.size(0)
-    bs, n_max_boxes, _ = gt_bboxes.size()
-    _gt_bboxes = gt_bboxes.reshape([-1, 4])
-    xy_centers = xy_centers.unsqueeze(0).repeat(bs * n_max_boxes, 1, 1)
-    gt_bboxes_lt = _gt_bboxes[:, 0:2].unsqueeze(1).repeat(1, n_anchors, 1)
-    gt_bboxes_rb = _gt_bboxes[:, 2:4].unsqueeze(1).repeat(1, n_anchors, 1)
+    n_anchors = xy_centers.size(0) # 3549
+    bs, n_max_boxes, _ = gt_bboxes.size() #16 3
+    _gt_bboxes = gt_bboxes.reshape([-1, 4]) #[16, 3, 4] --> [48, 4]
+    xy_centers = xy_centers.unsqueeze(0).repeat(bs * n_max_boxes, 1, 1) #[48, 3549, 2]
+    gt_bboxes_lt = _gt_bboxes[:, 0:2].unsqueeze(1).repeat(1, n_anchors, 1) #[48,3549,2]
+    gt_bboxes_rb = _gt_bboxes[:, 2:4].unsqueeze(1).repeat(1, n_anchors, 1) #[48,3549,2]
     b_lt = xy_centers - gt_bboxes_lt
     b_rb = gt_bboxes_rb - xy_centers
     bbox_deltas = torch.cat([b_lt, b_rb], dim=-1)
-    bbox_deltas = bbox_deltas.reshape([bs, n_max_boxes, n_anchors, -1])
+    bbox_deltas = bbox_deltas.reshape([bs, n_max_boxes, n_anchors, -1])#[16, 3, 3549, 4]
     return (bbox_deltas.min(axis=-1)[0] > eps).to(gt_bboxes.dtype)
 
 def select_highest_overlaps(mask_pos, overlaps, n_max_boxes):
@@ -55,6 +55,7 @@ def select_highest_overlaps(mask_pos, overlaps, n_max_boxes):
         fg_mask (Tensor): shape(bs, num_total_anchors)
         mask_pos (Tensor): shape(bs, n_max_boxes, num_total_anchors)
     """
+    '''已经获得正样本的mask，但是GT存在交叠的情况，因此一个点可能对应多个GT，我们需要杜绝这        种情况，将面积最大的GT赋值给有歧义的点.将mask_pos在n_max_boxes维度上叠加，当fg_mask.m       ax() > 1时，说明存在歧义点。找到歧义点的索引mask_multi_gts 以及每个预测框对应的面积         最大GT的索引max_overlaps_idx ，将max_overlaps_idx变成onehot形式，将有歧义点的值换成i        s_max_overlaps就可以祛除歧义。通过mask_pos.argmax(-2)能够获得target_gt_idx ，即可以         找到每个点对应的哪个GT'''
     fg_mask = mask_pos.sum(axis=-2)
     if fg_mask.max() > 1:
         mask_multi_gts = (fg_mask.unsqueeze(1) > 1).repeat([1, n_max_boxes, 1])

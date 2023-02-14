@@ -256,3 +256,52 @@ def get_head_shoulder_augmentation(phase, width=640, height=640, min_area=0., mi
             min_visibility=min_visibility,
             label_fields=['bbox_index']
             ))
+
+
+def get_hands_goods_augmentation(phase, width=640, height=640, min_area=0., min_visibility=0., bbox_format='pascal_voc'):
+    print("<<<<<<<<<<<<< using get_hands_goods_augmentation")
+    list_transforms = []
+    if phase == 'train':
+        list_transforms.extend([
+            albu.augmentations.transforms.JpegCompression(
+                quality_lower=50, quality_upper=90,
+                always_apply=False, p=0.5),
+            albu.OneOf([
+                albu.augmentations.transforms.RandomScale(
+                    scale_limit=(0.5, 2), p=1.0),
+                albu.augmentations.transforms.RandomScale(
+                    scale_limit=(0.5, 2), p=1.0),
+                albu.augmentations.transforms.RandomScale(
+                    scale_limit=(0.5, 2), p=1.0),
+                ]),
+            albu.PadIfNeeded(min_height=height,
+                            always_apply=True, border_mode=cv2.BORDER_CONSTANT,
+                            value=[0, 0, 0]),
+            albu.augmentations.transforms.SmallestMaxSize(
+                max_size=width, always_apply=True),
+            albu.augmentations.transforms.RandomCrop(
+                height=height,
+                width=width, p=1.0),
+            albu.augmentations.transforms.Rotate(
+                limit=20, interpolation=1, border_mode=cv2.BORDER_CONSTANT,
+                value=[0, 0, 0],
+                mask_value=[0, 0, 0], always_apply=False, p=0.7),
+            albu.OneOf([
+                albu.RandomBrightnessContrast(brightness_limit=0.2,
+                                              contrast_limit=0.2),
+                albu.NoOp()
+            ]),
+            albu.augmentations.transforms.ToGray(always_apply=False, p=0.1),
+        ])   
+    if(phase == 'test'):
+        list_transforms.extend([
+            albu.Resize(height=height, width=width)
+        ])    
+        return albu.Compose(list_transforms)
+    return albu.Compose(
+            list_transforms,
+            bbox_params=albu.BboxParams(
+                format=bbox_format,
+                min_area=min_area,
+                min_visibility=min_visibility,
+                label_fields=['category_id']))

@@ -70,6 +70,7 @@ class Inferer:
         label_save_path = osp.join(save_dir, 'labels', 'labels.txt')
         vid_path, vid_writer, windows = None, None, []
         fps_calculator = CalcFPS()
+
         sample_img = cv2.imread(self.files.files[0])
         height, width = sample_img.shape[:2]
         vis_folder = "/world/data-gpu-94/liyang/Github_projects/YOLOv6/runs/inference/exp"
@@ -79,6 +80,7 @@ class Inferer:
         video_save_path = os.path.join(save_folder, self.files.files[0].split("/")[-2].split("_imgs")[0] + ".mp4")
         print("video saved at {}".format(video_save_path))
         video_writer = cv2.VideoWriter(video_save_path, cv2.VideoWriter_fourcc(*"mp4v"), 10, (int(width), int(height)))
+
         with open(label_save_path, 'w') as f:
             for img_src, img_path, vid_cap in tqdm(self.files):
                 img, img_src = self.precess_image(img_src, self.img_size, self.stride, self.half)
@@ -336,8 +338,10 @@ class Inferer:
     def plot_box_and_label(image, lw, box, label='', color=(128, 128, 128), txt_color=(255, 255, 255), font=cv2.FONT_HERSHEY_COMPLEX):
         # Add one xyxy box to image with label
         p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
-        cv2.rectangle(image, p1, p2, color, thickness=lw, lineType=cv2.LINE_AA)
-        if label:
+        #cv2.rectangle(image, p1, p2, color, thickness=lw, lineType=cv2.LINE_AA)
+        #if label:
+        if int(label[0]) == 0:
+            cv2.rectangle(image, p1, p2, color, thickness=lw, lineType=cv2.LINE_AA)
             tf = max(lw - 1, 1)  # font thickness
             w, h = cv2.getTextSize(label, 0, fontScale=lw / 3, thickness=tf)[0]  # text width, height
             outside = p1[1] - h - 3 >= 0  # label fits outside box

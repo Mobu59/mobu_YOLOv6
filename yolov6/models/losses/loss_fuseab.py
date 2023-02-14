@@ -63,7 +63,7 @@ class ComputeLoss:
         batch_size = pred_scores.shape[0]
 
         # targets
-        targets =self.preprocess(targets, batch_size, gt_bboxes_scale)
+        targets = self.preprocess(targets, batch_size, gt_bboxes_scale)
         gt_labels = targets[:, :, :1]
         gt_bboxes = targets[:, :, 1:] #xyxy
         mask_gt = (gt_bboxes.sum(-1, keepdim=True) > 0).float()
@@ -150,7 +150,8 @@ class ComputeLoss:
             targets_list[int(item[0])].append(item[1:])
         max_len = max((len(l) for l in targets_list))
         targets = torch.from_numpy(np.array(list(map(lambda l:l + [[-1,0,0,0,0]]*(max_len - len(l)), targets_list)))[:,1:,:]).to(targets.device)
-        batch_target = targets[:, :, 1:5].mul_(scale_tensor)
+        #batch_target = targets[:, :, 1:5].mul_(scale_tensor)
+        batch_target = targets[:, :, 1:5]
         targets[..., 1:] = xywh2xyxy(batch_target)
         return targets
 

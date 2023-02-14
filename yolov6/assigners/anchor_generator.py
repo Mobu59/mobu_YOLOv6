@@ -30,6 +30,7 @@ def generate_anchors(feats, fpn_strides, grid_cell_size=5.0, grid_cell_offset=0.
         stride_tensor = torch.cat(stride_tensor)
         return anchor_points, stride_tensor
     else:
+        ''' 对于af, 在每个网格的中心点生成1个5*步长的正方形anchor，而ab则生成3个一样的正方形anchor'''
         for i, stride in enumerate(fpn_strides):
             _, _, h, w = feats[i].shape
             cell_half_size = grid_cell_size * stride * 0.5

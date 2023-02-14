@@ -77,8 +77,10 @@ def check_and_init(args):
         args.resume = checkpoint_path  # set the args.resume to checkpoint path.
     else:
         args.save_dir = str(increment_name(osp.join(args.output_dir, args.name)))
+        #args.save_dir = osp.join(args.output_dir, args.name)
         if master_process:
             os.makedirs(args.save_dir)
+            #os.makedirs(args.save_dir, exist_ok=True)
 
     cfg = Config.fromfile(args.conf_file)
     if not hasattr(cfg, 'training_mode'):

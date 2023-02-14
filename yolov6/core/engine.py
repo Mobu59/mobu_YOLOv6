@@ -151,6 +151,7 @@ class Trainer:
             import numpy as np
             import ipdb
             count = 0
+            COLOR = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
             for i in trange(5):
                 for ind, data in self.pbar:
                     images, targets = self.prepro_data(data, self.device)
@@ -177,7 +178,7 @@ class Trainer:
                             y1 = cy + h * 0.5
                             #这里反算回去乘的值应该是最开始输入的图像尺寸
                             #save_image = cv2.rectangle(image, (int(x0 * 416), int(y0 * 416)), (int(x1 * 416), int(y1 * 416)), 255, 2)
-                            cv2.rectangle(image, (int(x0), int(y0)), (int(x1), int(y1)), 255, 2)
+                            cv2.rectangle(image, (int(x0), int(y0)), (int(x1), int(y1)), COLOR[name], 2)
                         count += 1
                         cv2.imwrite('/world/data-gpu-94/liyang/testshow/{}.jpg'.format(count), image)
             ipdb.set_trace()
@@ -193,7 +194,18 @@ class Trainer:
                                                                 epoch_num, self.max_epoch, temperature, step_num)
             
             elif self.args.fuse_ab:       
+                '''preds[0]: three output of FPN
+                   preds[0][0].shape: eg.[16, 96, 52, 52] 
+                   preds[0][1].shape: eg.[16, 192, 26, 26] 
+                   preds[0][2].shape: eg.[16, 384, 13, 13] 
+                   preds[1] = cls_score_ab.shape: [16, 10647, 3]
+                   preds[2] = reg_dist_ab.shape: [16, 10647, 4]
+                   preds[3] = cls_score_af.shape: [16, 3549, 3]
+                   preds[4] = reg_dist_af.shape: [16, 10647, 68], 68=4+4*reg_max
+                '''
+                #preds[0], preds[3], preds[4]是anchor-free分支的输出
                 total_loss, loss_items = self.compute_loss((preds[0],preds[3],preds[4]), targets, epoch_num, step_num) # YOLOv6_af
+                #preds[0:3]是anchor-based分支的输出
                 total_loss_ab, loss_items_ab = self.compute_loss_ab(preds[:3], targets, epoch_num, step_num) # YOLOv6_ab
                 total_loss += total_loss_ab
                 loss_items += loss_items_ab
@@ -227,6 +239,8 @@ class Trainer:
 
             save_ckpt_dir = osp.join(self.save_dir, 'weights')
             save_checkpoint(ckpt, (is_val_epoch) and (self.ap == self.best_ap), save_ckpt_dir, model_name='last_ckpt')
+            if self.epoch % 1 == 0:
+                save_checkpoint(ckpt, (is_val_epoch) and (self.ap == self.best_ap), save_ckpt_dir, model_name='epoch_{}_ckpt'.format(self.epoch))
             if self.epoch >= self.max_epoch - self.args.save_ckpt_on_last_n_epoch:
                 save_checkpoint(ckpt, False, save_ckpt_dir, model_name=f'{self.epoch}_ckpt')
 
@@ -252,7 +266,9 @@ class Trainer:
                             batch_size=self.batch_size // self.world_size * 2,
                             img_size=self.img_size,
                             model=self.ema.ema if self.args.calib is False else self.model,
-                            conf_thres=0.03,
+                            #conf_thres=0.03,
+                            conf_thres=0.35,
+                            iou_thres=0.35, 
                             dataloader=self.val_loader,
                             save_dir=self.save_dir,
                             task='train')

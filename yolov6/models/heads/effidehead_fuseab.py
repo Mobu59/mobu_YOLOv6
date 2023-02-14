@@ -15,9 +15,9 @@ class Detect(nn.Module):
         assert head_layers is not None
         self.nc = num_classes  # number of classes
         self.no = num_classes + 5  # number of outputs per anchor
-        self.nl = num_layers  # number of detection layers
+        self.nl = num_layers  # number of detection layers, 3
         if isinstance(anchors, (list, tuple)):
-            self.na = len(anchors[0]) // 2
+            self.na = len(anchors[0]) // 2 #self.na = 3
         else:
             self.na = anchors
         self.grid = [torch.zeros(1)] * num_layers
@@ -30,6 +30,7 @@ class Detect(nn.Module):
         self.proj_conv = nn.Conv2d(self.reg_max + 1, 1, 1, bias=False)
         self.grid_cell_offset = 0.5
         self.grid_cell_size = 5.0
+        #将初始anchor转化为每一层特征图的anchor
         self.anchors_init= ((torch.tensor(anchors) / self.stride[:,None])).reshape(self.nl, self.na, 2)
 
         # Init decouple head
@@ -42,6 +43,16 @@ class Detect(nn.Module):
         self.reg_preds_ab = nn.ModuleList()
 
         # Efficient decoupled head layers
+        '''
+        BS = BN + SiLU
+        self.stems:[conv(96,96,1,1)+BS, conv(192,192,1,1)+BS, conv(384,384,1,1)+BS],
+        self.cls_convs:[conv(96,96,3,1)+BS, conv(192,192,3,1)+BS, conv(384,384,3,1)+BS]
+        self.reg_convs:[conv(96,96,3,1)+BS, conv(192,192,3,1)+BS, conv(384,384,3,1)+BS]
+        self.cls_preds_af:[conv(96,3,1,1)+BS, conv(192,3,1,1), conv(384,3,1,1)]
+        self.reg_preds_af:[conv(96,68,1,1)+BS, conv(192,68,1,1), conv(384,68,1,1)]
+        self.cls_preds_ab:[conv(96,9,1,1)+BS, conv(192,9,1,1), conv(384,9,1,1)]
+        self.reg_preds_ab:[conv(96,12,1,1)+BS, conv(192,12,1,1), conv(384,12,1,1)]
+        '''
         for i in range(num_layers):
             idx = i*7
             self.stems.append(head_layers[idx])
@@ -87,10 +98,11 @@ class Detect(nn.Module):
             conv.weight = torch.nn.Parameter(w, requires_grad=True)
         
         self.proj = nn.Parameter(torch.linspace(0, self.reg_max, self.reg_max + 1), requires_grad=False)
-        self.proj_conv.weight = nn.Parameter(self.proj.view([1, self.reg_max + 1, 1, 1]).clone().detach(),
-                                                   requires_grad=False)
+        self.proj_conv.weight = nn.Parameter(self.proj.view([1, self.reg_max + 1, 1, 1]).clone().detach(), requires_grad=False)
 
     def forward(self, x):
+        #import ipdb
+        #ipdb.set_trace()
         if self.training:
             device = x[0].device
             cls_score_list_af = []
@@ -134,7 +146,7 @@ class Detect(nn.Module):
             reg_dist_list_ab = torch.cat(reg_dist_list_ab, axis=1)
             cls_score_list_af = torch.cat(cls_score_list_af, axis=1)
             reg_dist_list_af = torch.cat(reg_dist_list_af, axis=1)
-            
+
             return x, cls_score_list_ab, reg_dist_list_ab, cls_score_list_af, reg_dist_list_af
 
         else:

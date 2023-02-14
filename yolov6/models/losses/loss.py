@@ -54,17 +54,21 @@ class ComputeLoss:
         epoch_num,
         step_num
     ):
-        
-        feats, pred_scores, pred_distri = outputs
+        #[pan_out0, pan_out1, pan_out2], [16, 3549, 3], [16, 3549, 68]
+        feats, pred_scores, pred_distri = outputs 
+        #[3549, 4], [3549, 2], [2704, 676, 169], [3549, 1]
         anchors, anchor_points, n_anchors_list, stride_tensor = \
                generate_anchors(feats, self.fpn_strides, self.grid_cell_size, self.grid_cell_offset, device=feats[0].device)
    
+        #type: 'torch.cuda.HalfTensor', torch.float16
         assert pred_scores.type() == pred_distri.type()
+        #tensor([[self.ori_img_size, self.ori_img_size, self.ori_img_size, self.ori_img_size]]), eg:tensor([[416, 416, 416, 416]])
         gt_bboxes_scale = torch.full((1,4), self.ori_img_size).type_as(pred_scores)
+        #bs: eg.16 
         batch_size = pred_scores.shape[0]
 
         # targets
-        targets =self.preprocess(targets, batch_size, gt_bboxes_scale)
+        targets = self.preprocess(targets, batch_size, gt_bboxes_scale)
         gt_labels = targets[:, :, :1]
         gt_bboxes = targets[:, :, 1:] #xyxy
         mask_gt = (gt_bboxes.sum(-1, keepdim=True) > 0).float()
@@ -179,13 +183,13 @@ class ComputeLoss:
         max_len = max((len(l) for l in targets_list))
         targets = torch.from_numpy(np.array(list(map(lambda l:l + [[-1,0,0,0,0]]*(max_len - len(l)), targets_list)))[:,1:,:]).to(targets.device)
         #batch_target = targets[:, :, 1:5].mul_(scale_tensor)
-        batch_target = targets[:, :, 1:5] #因为开启了多尺度训练，所以这里也需要将标签转化为绝对值，否则的话模型学习到的只是相对于一个尺度的信息。
+        batch_target = targets[:, :, 1:5] #因为开启了多尺度训练，前面已经将标签乘以了图像尺寸，所以这里不需要再乘了。
         targets[..., 1:] = xywh2xyxy(batch_target)
         return targets
 
     def bbox_decode(self, anchor_points, pred_dist):
         if self.use_dfl:
-            batch_size, n_anchors, _ = pred_dist.shape
+            batch_size, n_anchors, _ = pred_dist.shape #[16, 10647, 68]
             pred_dist = F.softmax(pred_dist.view(batch_size, n_anchors, 4, self.reg_max + 1), dim=-1).matmul(self.proj.to(pred_dist.device))
         return dist2bbox(pred_dist, anchor_points)
 

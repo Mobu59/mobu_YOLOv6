@@ -28,6 +28,11 @@ class TaskAlignedAssigner(nn.Module):
                 mask_gt):
         """This code referenced to
            https://github.com/Nioolek/PPYOLOE_pytorch/blob/master/ppyoloe/assigner/tal_assigner.py
+           Task-Aligned Assigner计算步骤如下：
+                1. 计算所有bbox与gt 之间的对齐度
+                2. 选择top-k bbox作为每个gt的候选项
+                3. 将正样本的中心限制在gt内(因为Anchor-Free检测器只能预测大于0的距离)
+                4. 如果一个Anchor被分配给多个gt，将选择IoU最高的那个。
 
         Args:
             pd_scores (Tensor): shape(bs, num_total_anchors, num_classes)
@@ -43,7 +48,7 @@ class TaskAlignedAssigner(nn.Module):
             fg_mask (Tensor): shape(bs, num_total_anchors)
         """
         self.bs = pd_scores.size(0)
-        self.n_max_boxes = gt_bboxes.size(1)
+        self.n_max_boxes = gt_bboxes.size(1) # 3
 
         if self.n_max_boxes == 0:
             device = gt_bboxes.device
@@ -51,11 +56,13 @@ class TaskAlignedAssigner(nn.Module):
                    torch.zeros_like(pd_bboxes).to(device), \
                    torch.zeros_like(pd_scores).to(device), \
                    torch.zeros_like(pd_scores[..., 0]).to(device)
-
+        
+        #1, 16, 16
         cycle, step, self.bs = (1, self.bs, self.bs) if self.n_max_boxes <= 100 else (self.bs, 1, 1)
         target_labels_lst, target_bboxes_lst, target_scores_lst, fg_mask_lst = [], [], [], []
         # loop batch dim in case of numerous object box
         for i in range(cycle):
+            #按batch取数据, start:end=0:16
             start, end = i*step, (i+1)*step
             pd_scores_ = pd_scores[start:end, ...]
             pd_bboxes_ = pd_bboxes[start:end, ...]
@@ -120,9 +127,10 @@ class TaskAlignedAssigner(nn.Module):
                         gt_labels,
                         gt_bboxes):
 
-        pd_scores = pd_scores.permute(0, 2, 1)
+        pd_scores = pd_scores.permute(0, 2, 1) #[16, 3, 3549]
         gt_labels = gt_labels.to(torch.long)
-        ind = torch.zeros([2, self.bs, self.n_max_boxes], dtype=torch.long)
+        ind = torch.zeros([2, self.bs, self.n_max_boxes], dtype=torch.long) #[2, 16, 3]
+        #.repeat(1, self.n_max_boxes)表示行重复1次，列重复self.n_max_boxes次
         ind[0] = torch.arange(end=self.bs).view(-1, 1).repeat(1, self.n_max_boxes)
         ind[1] = gt_labels.squeeze(-1)
         bbox_scores = pd_scores[ind[0], ind[1]]
@@ -138,6 +146,7 @@ class TaskAlignedAssigner(nn.Module):
                                topk_mask=None):
 
         num_anchors = metrics.shape[-1]
+        #从大到小得到前topk个数据及索引, topk_metric:[16, 3, 13], topk_idxs:[16, 3, 13]
         topk_metrics, topk_idxs = torch.topk(
             metrics, self.topk, axis=-1, largest=largest)
         if topk_mask is None:
