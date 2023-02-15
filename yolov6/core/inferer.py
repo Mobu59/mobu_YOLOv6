@@ -67,12 +67,15 @@ class Inferer:
         ''' Model Inference and results visualization '''
         label_save_path = osp.join(save_dir, 'labels', 'labels.txt')
         img_save_dir = osp.join(save_dir, 'images')
+        _img_save_dir = osp.join(save_dir, 'noresult_images')
         if not osp.exists(img_save_dir):
             os.mkdir(img_save_dir, 0o777)
+        if not osp.exists(_img_save_dir):
+            os.mkdir(_img_save_dir, 0o777)
         with open(label_save_path, 'w') as f:
             for img_path in tqdm(self.img_paths):
                 if img_path.endswith(".mp4"):
-                    self.imageflow_demo(img_path, conf_thres, iou_thres, classes, agnostic_nms, max_det)
+                    self.imageflow_demo(img_path, conf_thres, iou_thres, classes, agnostic_nms, max_det, hide_labels, hide_conf)
                 else:    
                     img, img_src = self.precess_image(img_path, self.img_size, self.stride, self.half)
                     img = img.to(self.device)
@@ -83,6 +86,7 @@ class Inferer:
                     det = non_max_suppression(pred_results, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)[0]
 
                     save_path = osp.join(img_save_dir, osp.basename(img_path))  # im.jpg
+                    _save_path = osp.join(_img_save_dir, osp.basename(img_path))  # im.jpg
                     #txt_path = osp.join(save_dir, 'labels', osp.splitext(osp.basename(img_path).split('.'))[0])
 
                     gn = torch.tensor(img_src.shape)[[1, 0, 1, 0]]  # normalization gain whwh
@@ -117,7 +121,8 @@ class Inferer:
                         if save_img:
                             cv2.imwrite(save_path, img_src)
                     else:       
-                        print("11111")
+                        if save_img:
+                            cv2.imwrite(_save_path, img_src)
 
     @staticmethod
     def precess_image(path, img_size, stride, half):
@@ -157,7 +162,7 @@ class Inferer:
 
         return boxes
 
-    def imageflow_demo(self, img_path, conf_thres, iou_thres, classes, agnostic_nms, max_det):
+    def imageflow_demo(self, img_path, conf_thres, iou_thres, classes, agnostic_nms, max_det, hide_labels, hide_conf):
         cap = cv2.VideoCapture(img_path)
         width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
@@ -168,14 +173,16 @@ class Inferer:
         save_folder = osp.join(vis_folder, f"{current_date}_videos")
         os.makedirs(save_folder, exist_ok=True)
         save_path = osp.join(save_folder, img_path.split("/")[-1])
-        s = fps / 10.0
+        #s = fps / 10.0
+        s = fps
         vid_writer = cv2.VideoWriter(
-            save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps/s, (int(width), int(height))
+            #save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps/s, (int(width), int(height))
+            save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
         )
         cnt = 1
         keep = []
         print("Inferencing input video, this might take a minute")
-        while cnt <= 6000:
+        while cnt <= 100000:
             ret_val, frame = cap.read()
             if ret_val:
                 if fps > 20:
@@ -209,6 +216,7 @@ class Inferer:
                 else:
                     img_src = frame
                     img = letterbox(img_src, self.img_size, stride=self.stride)[0]
+                    print(img.shape, '11111')
                     img = img.transpose((2, 0, 1))
                     img = torch.from_numpy(np.ascontiguousarray(img))
                     img = img.half() if self.half else img.float()
@@ -227,8 +235,18 @@ class Inferer:
                             y0 = xyxy[1]
                             x1 = xyxy[2]
                             y1 = xyxy[3]
-                            cv2.rectangle(img_src, (int(x0), int(y0)), (int(x1), int(y1)), (0, 255, 255), 2)
-                    vid_writer.write(img_src)
+                            #cv2.rectangle(img_src, (int(x0), int(y0)), (int(x1), int(y1)), (0, 255, 255), 2)
+                            class_num = int(cls)  # integer class
+                            label = None if hide_labels else (self.class_names[class_num] if hide_conf else f'{self.class_names[class_num]} {conf:.2f}')
+
+                            self.plot_box_and_label(img_ori, max(round(sum(img_ori.shape) / 2 * 0.003), 2), xyxy, label, color=self.generate_colors(class_num, True))
+                    h, w = img_ori.shape[:2]        
+                    if min(h, w) > 800:
+                        r = max(h/800, w/800)
+                        img_ori = cv2.resize(img_ori, (w/r, h/r))
+                    print(img_ori.shape)    
+                    exit()
+                    vid_writer.write(img_ori)
             cnt += 1
 
     def check_img_size(self, img_size, s=32, floor=0):
