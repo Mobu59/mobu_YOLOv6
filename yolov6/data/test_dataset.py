@@ -192,7 +192,7 @@ class TrainValDataset(Dataset):
             #过滤宽高比大于阈值的框    
             save_boxes = []    
             for i, k in enumerate(labels):
-                if max(k[3] / (k[4] + 1e-7), k[4] / (k[3] + 1e-7)) > 10:
+                if max(k[3] / (k[4] + 1e-7), k[4] / (k[3] + 1e-7)) > 2.4:
                     x0 = int(k[1] - k[3] / 2)
                     y0 = int(k[2] - k[4] / 2)
                     x1 = int(k[1] + k[3] / 2)
@@ -749,6 +749,7 @@ class TrainValDataset(Dataset):
             name = int(i['name'])
             if name < 0:
                 name = 0
+            #if x0 > w or y0 > h or x1 < 0 or y1 < 0:
             if x0 > w or y0 > h or x1 < 0 or y1 < 0:
                 continue
             cx = (x0 + x1) / 2.0 / w

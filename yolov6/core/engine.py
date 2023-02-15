@@ -144,7 +144,7 @@ class Trainer:
             write_tbimg(self.tblogger, self.vis_train_batch, self.step + self.max_stepnum * self.epoch, type='train')
 
         #vis
-        debug = 0
+        debug = 1
         if debug:
             from tqdm import trange
             import cv2
