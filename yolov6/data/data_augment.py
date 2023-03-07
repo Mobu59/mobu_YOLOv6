@@ -56,6 +56,32 @@ def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleu
     return im, r, (dw, dh)
 
 
+def letterbox_v1(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleup=True, stride=32):
+    # Resize and pad image while meeting stride-multiple constraints
+    shape = im.shape[:2]  # current shape [height, width]
+    if isinstance(new_shape, int):
+        new_shape = (new_shape, new_shape)
+
+    # Scale ratio (new / old)
+    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+    if not scaleup:  # only scale down, do not scale up (for better val mAP)
+        r = min(r, 1.0)
+
+    # Compute padding
+    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
+
+    if auto:  # minimum rectangle
+        dw, dh = np.mod(dw, stride), np.mod(dh, stride)  # wh padding
+
+    if shape[::-1] != new_unpad:  # resize
+        im = cv2.resize(im, new_unpad, interpolation=cv2.INTER_LINEAR)
+    top, bottom = 0, int(round(dh + 0.1))
+    left, right = 0, int(round(dw + 0.1))
+
+    im = cv2.copyMakeBorder(im, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
+    return im, r, (dw, dh)
+
 def mixup(im, labels, im2, labels2):
     # Applies MixUp augmentation https://arxiv.org/pdf/1710.09412.pdf
     r = np.random.beta(32.0, 32.0)  # mixup ratio, alpha=beta=32.0
@@ -202,43 +228,50 @@ def get_head_shoulder_augmentation(phase, width=640, height=640, min_area=0., mi
     if phase == 'train':
         list_transforms.extend([
             albu.augmentations.transforms.JpegCompression(
-                quality_lower=20, quality_upper=50,
+                quality_lower=20, quality_upper=100,
                 always_apply=False, p=0.5),
             albu.augmentations.transforms.RandomScale(
                 scale_limit=0.5, p=0.5),
-            #albu.PadIfNeeded(min_height=1080, min_width=1920, always_apply=True, border_mode=cv2.BORDER_CONSTANT, value=[0, 0, 0]),
-            #albu.augmentations.transforms.SmallestMaxSize(
-            #    max_size=width, always_apply=True),
+            albu.PadIfNeeded(min_height=height, min_width=width, always_apply=True, border_mode=cv2.BORDER_CONSTANT, value=[0, 0, 0]),
+            albu.augmentations.transforms.SmallestMaxSize(
+                max_size=width, always_apply=True),
             #albu.augmentations.transforms.Rotate(
-            #    limit=15, interpolation=1, border_mode=cv2.BORDER_CONSTANT, 
+            #    limit=30, interpolation=1, border_mode=cv2.BORDER_CONSTANT, 
             #    value=[0, 0, 0], 
             #    mask_value=[0, 0, 0], 
-            #    always_apply=False, p=1.0),    
-            albu.augmentations.transforms.RandomResizedCrop(
-                scale=(0.5, 1.2), ratio=(0.9, 1.2),
+            #    always_apply=False, p=0.7),    
+            #albu.augmentations.transforms.RandomResizedCrop(
+            #    scale=(0.5, 1.2), ratio=(0.9, 1.2),
+            #    height=height,
+            #    width=width, p=1.0),
+            albu.augmentations.transforms.RandomCrop(
                 height=height,
                 width=width, p=1.0),
-            #albu.augmentations.transforms.RandomCrop(
-                #height=height,
-                #width=width, p=1.0),
-            #    height=int(1080 * prob),
-            #    width=int(1920 * prob), p=1.0),
             albu.OneOf([
                 albu.RandomBrightnessContrast(
-                brightness_limit=0.3,
-                contrast_limit=0.3),
-                albu.RandomGamma(gamma_limit=(80, 120)),
+                brightness_limit=0.2,
+                contrast_limit=0.2),
+                #albu.RandomGamma(gamma_limit=(80, 120)),
                 albu.NoOp()
             ]),
-            #albu.augmentations.transforms.Blur(blur_limit=5, p=0.5),
+            #albu.augmentations.transforms.Blur(blur_limit=5, p=0.2),
             albu.OneOf([
-                albu.RGBShift(r_shift_limit=15, b_shift_limit=15, g_shift_limit=15),
-                albu.HueSaturationValue(hue_shift_limit=30, sat_shift_limit=30),
+                albu.RGBShift(r_shift_limit=5, b_shift_limit=5, g_shift_limit=5),
+                albu.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10),
                 albu.NoOp(),
             ]),
+            albu.OneOf([
+                albu.IAAAdditiveGaussianNoise(),
+                albu.GaussNoise(),
+            ], p=0.2),
             albu.HorizontalFlip(p=0.5),
             #albu.VerticalFlip(p=0.5),
-            albu.augmentations.transforms.Cutout(num_holes=12, max_h_size=8, max_w_size=8, fill_value=0)
+            albu.augmentations.transforms.Cutout(num_holes=12, max_h_size=8, max_w_size=8, fill_value=0),
+            albu.OneOf([
+                albu.CLAHE(clip_limit=2),
+                albu.IAASharpen(),
+                albu.IAAEmboss(),
+            ], p=0.3),
         ])
     if phase == 'test':
         pass

@@ -1,0 +1,9 @@
+# head_shoulder_det
+#train: "/world/data-gpu-94/smart_shelf_data/data_v4/train.v4.json"
+train: "/world/data-gpu-94/smart_shelf_data/data_v3/train.v5.json"
+val: "/world/data-gpu-94/smart_shelf_data/data_v4/test.v2.json"
+# number of classes
+nc: 3
+
+# class names
+names: [ '0', '1', '2']

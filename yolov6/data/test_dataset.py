@@ -26,6 +26,7 @@ from .data_augment import (
     mosaic_augmentation,
     get_head_shoulder_augmentation
 )
+from .rotation import getRotatedImg
 from yolov6.utils.events import LOGGER
 
 # Parameters
@@ -92,11 +93,12 @@ class TrainValDataset(Dataset):
             save_dir, "instances_" + osp.basename(img_dir) + ".json"
         )
         img_info = self.get_imgs_labels_from_json_v0(self.data_dict['val'])[2]
-        TrainValDataset.generate_coco_format_labels(
-            img_info, self.class_names, save_path
-        )
+        if not os.path.exists(save_path):
+            TrainValDataset.generate_coco_format_labels(
+                img_info, self.class_names, save_path
+            )
         if self.aug_domain == 'head_shoulder_det':
-            self.albu_aug = get_head_shoulder_augmentation('train', width=self.img_size, height=self.img_size, min_area=64, min_visibility=0.7)
+            self.albu_aug = get_head_shoulder_augmentation('train', width=self.img_size, height=self.img_size, min_area=0., min_visibility=0.)
 
     def __len__(self):
         """Get the length of dataset"""
@@ -182,19 +184,33 @@ class TrainValDataset(Dataset):
                 boxes[:, 2] = (labels[:, 3] - labels[:, 1])  # width
                 boxes[:, 3] = (labels[:, 4] - labels[:, 2])  # height
                 labels[:, 1:] = boxes
+            #过滤尺寸太小的框
+            mask_b = np.minimum(labels[:, 3], labels[:, 4]) > 1.0
+            labels = labels[mask_b]
             #过滤宽高比大于阈值的框    
             save_boxes = []    
             for i, k in enumerate(labels):
-                if max(k[3] / (k[4] + 1e-7), k[4] / (k[3] + 1e-7)) > 1.6:
+                if max(k[3] / (k[4] + 1e-7), k[4] / (k[3] + 1e-7)) > 2.4:
                     x0 = int(k[1] - k[3] / 2)
                     y0 = int(k[2] - k[4] / 2)
                     x1 = int(k[1] + k[3] / 2)
                     y1 = int(k[2] + k[4] / 2)
-                    aug_img[y0:y1, x0:x1] = 114
+                    aug_img[y0:y1, x0:x1] = 0
                     continue
                 save_boxes.append(k)
             save_boxes = np.ascontiguousarray(save_boxes)    
             labels = save_boxes
+            if random.random() <= 0.3:
+                aug_img, labels = getRotatedImg(aug_img, labels, 30.)
+                shape = (
+                    self.batch_shapes[self.batch_indices[index]]
+                    if self.rect
+                    else self.img_size
+                )  # final letterboxed shape
+                aug_img, ratio, pad = letterbox(aug_img, shape, auto=False, scaleup=self.augment)
+                if len(labels.shape) < 2:
+                    labels = np.array([[0, 0, 0, 0, 0]])
+                labels[:, 1:] = labels[:, 1:] * ratio
 
             labels_out = torch.zeros((len(labels), 6))
             try:
@@ -266,7 +282,6 @@ class TrainValDataset(Dataset):
             boxes[:, 2] = (labels[:, 3] - labels[:, 1])  # width
             boxes[:, 3] = (labels[:, 4] - labels[:, 2])  # height
             labels[:, 1:] = boxes
-
         if self.augment:
             img, labels = self.general_augment(img, labels)
 

@@ -15,8 +15,8 @@ from PIL import ImageFont
 from yolov6.utils.events import LOGGER, load_yaml
 
 from yolov6.layers.common import DetectBackend
-from yolov6.data.data_augment import letterbox
-from yolov6.utils.nms import non_max_suppression
+from yolov6.data.data_augment import letterbox, letterbox_v1
+from yolov6.utils.nms import non_max_suppression, non_max_suppression_by_objconf
 
 
 class Inferer:
@@ -72,6 +72,7 @@ class Inferer:
             os.mkdir(img_save_dir, 0o777)
         if not osp.exists(_img_save_dir):
             os.mkdir(_img_save_dir, 0o777)
+
         with open(label_save_path, 'w') as f:
             for img_path in tqdm(self.img_paths):
                 if img_path.endswith(".mp4"):
@@ -83,7 +84,8 @@ class Inferer:
                         img = img[None]
                         # expand for batch dim
                     pred_results = self.model(img)
-                    det = non_max_suppression(pred_results, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)[0]
+                    #det = non_max_suppression(pred_results, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)[0]
+                    det = non_max_suppression_by_objconf(pred_results, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)[0]
 
                     save_path = osp.join(img_save_dir, osp.basename(img_path))  # im.jpg
                     _save_path = osp.join(_img_save_dir, osp.basename(img_path))  # im.jpg
@@ -140,7 +142,7 @@ class Inferer:
         image = torch.from_numpy(np.ascontiguousarray(image))
         image = image.half() if half else image.float()  # uint8 to fp16/32
         #image /= 255  # 0 - 255 to 0.0 - 1.0
-        image = (image - 127.0) / 128.0
+        #image = (image - 127.0) / 128.0
         image = image
 
         return image, img_src

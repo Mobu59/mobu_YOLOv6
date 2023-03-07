@@ -28,8 +28,8 @@ if __name__ == '__main__':
     parser.add_argument('--inplace', action='store_true', help='set Detect() inplace=True')
     parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0, 1, 2, 3 or cpu')
     args = parser.parse_args()
-    #args.img_size = [288, 512]
-    args.img_size = [576, 1024]
+    args.img_size = [288, 512]
+    #args.img_size = [576, 1024]
     #args.img_size *= 2 if len(args.img_size) == 1 else 1  # expand
     print(args)
     t = time.time()
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     try:
         LOGGER.info('\nStarting to export ONNX...')
         export_file = args.weights.replace('.pt', '.onnx')  # filename
-        torch.onnx.export(model, img, export_file, verbose=False, opset_version=12,
+        torch.onnx.export(model, img, export_file, verbose=True, opset_version=12,
                           training=torch.onnx.TrainingMode.EVAL,
                           do_constant_folding=True,
                           input_names=['image_arrays'],

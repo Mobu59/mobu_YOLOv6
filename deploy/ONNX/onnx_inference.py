@@ -4,7 +4,7 @@ import numpy as np
 import onnxruntime
 
 from utils import xywh2xyxy, nms, draw_detections
-#from yolov6.data.data_augment import letterbox
+from yolov6.data.data_augment import letterbox
 
 
 class YOLOv6:
@@ -46,7 +46,8 @@ class YOLOv6:
 
         # Resize input image
         input_img = cv2.resize(input_img, (self.input_width, self.input_height))
-        #input_img = letterbox(input_img, (self.input_height, self.input_width))[0]
+        #input_img, r, (dw, dh) = letterbox(input_img, (self.input_height, self.input_width), auto=False)
+
 
         # Scale input pixel values to 0 to 1
         #input_img = input_img / 255.0
@@ -66,7 +67,6 @@ class YOLOv6:
 
     def process_output(self, output):
         predictions = np.squeeze(output)
-
         # Filter out object confidence scores below threshold
         obj_conf = predictions[:, 4]
         predictions = predictions[obj_conf > self.conf_threshold]
@@ -90,13 +90,13 @@ class YOLOv6:
 
         # Apply non-maxima suppression to suppress weak, overlapping bounding boxes
         indices = nms(boxes, scores, self.iou_threshold)
+        #indices = nms(boxes, predictions[:, 4:5], self.iou_threshold)
 
         return boxes[indices], scores[indices], class_ids[indices]
 
     def extract_boxes(self, predictions):
         # Extract boxes from predictions
         boxes = predictions[:, :4]
-
         # Scale boxes to original image dimensions
         boxes /= np.array([self.input_width, self.input_height, self.input_width, self.input_height])
         boxes *= np.array([self.img_width, self.img_height, self.img_width, self.img_height])
@@ -126,6 +126,7 @@ class YOLOv6:
 if __name__ == '__main__':
     #model_path = "/world/data-gpu-94/liyang/Github_projects/YOLOv6/runs/train/exp/weights/yolov6n_head_det.v1/best_ckpt.onnx"
     model_path = "/world/data-gpu-94/liyang/Github_projects/YOLOv6/runs/train/exp/weights/yolov6t_head_det.v1/last_ckpt.onnx"
+    model_path = "/world/data-gpu-94/liyang/Github_projects/YOLOv6/runs/train/exp/weights/epoch_72_ckpt.onnx"
 
     # Initialize YOLOv6 object detector
     yolov6_detector = YOLOv6(model_path, conf_thres=0.35, iou_thres=0.5)
@@ -140,6 +141,7 @@ if __name__ == '__main__':
     print("Finished")
 
     json_path = "/world/data-gpu-94/liyang/pedDetection/head_detection/badcase/ped_head.badcase.gt.json"
+    json_path = "/world/data-gpu-94/ped_detection_data/biped.v8.head.mix.shuf.test.json"
     save_file = open("./eval/onnx_res.txt", 'w') 
     with open(json_path, 'r') as f:
         lines = f.readlines()

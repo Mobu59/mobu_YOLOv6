@@ -100,11 +100,18 @@ class Trainer:
             import numpy as np
             import ipdb
             count = 0
+            _COLORS = np.array(
+                [
+                    0.000, 0.447, 0.741,
+                    0.850, 0.325, 0.098,
+                    0.929, 0.694, 0.125,
+                ]
+            ).astype(np.float32).reshape(-1, 3)
             for i in trange(5):
                 for ind, data in self.pbar:
                     images, targets = self.prepro_data(data, self.device)
                     images, targets = self.preprocess(images, targets, self.img_size)
-                    if ind == 10: #可视化10个batch的数据
+                    if ind == 20: #可视化10个batch的数据
                         exit()
                     for index, img in enumerate(images):
                         img = img.cpu().numpy().transpose(1, 2, 0)
@@ -124,9 +131,10 @@ class Trainer:
                             x1 = cx + w * 0.5
                             y0 = cy - h * 0.5
                             y1 = cy + h * 0.5
+                            color = (_COLORS[name] * 255).astype(np.uint8).tolist()
                             #这里反算回去乘的值应该是最开始输入的图像尺寸
                             #save_image = cv2.rectangle(image, (int(x0 * 416), int(y0 * 416)), (int(x1 * 416), int(y1 * 416)), 255, 2)
-                            cv2.rectangle(image, (int(x0), int(y0)), (int(x1), int(y1)), 255, 2)
+                            cv2.rectangle(image, (int(x0), int(y0)), (int(x1), int(y1)), color, thickness=2, lineType=2)
                         count += 1
                         cv2.imwrite('/world/data-gpu-94/liyang/testshow/{}.jpg'.format(count), image)
             ipdb.set_trace()
@@ -163,6 +171,8 @@ class Trainer:
 
             save_ckpt_dir = osp.join(self.save_dir, 'weights')
             save_checkpoint(ckpt, (is_val_epoch) and (self.ap == self.best_ap), save_ckpt_dir, model_name='last_ckpt')
+            if self.epoch % 1 == 0:
+                save_checkpoint(ckpt, (is_val_epoch) and (self.ap == self.best_ap), save_ckpt_dir, model_name='epoch_{}_ckpt'.format(self.epoch))
             del ckpt
             # log for tensorboard
             write_tblog(self.tblogger, self.epoch, self.evaluate_results, self.mean_loss)

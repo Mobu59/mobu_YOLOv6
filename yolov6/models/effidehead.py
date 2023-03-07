@@ -70,6 +70,7 @@ class Detect(nn.Module):
                 bs, _, ny, nx = x[i].shape
                 x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
             else:
+                decode = False
                 y = torch.cat([reg_output, obj_output.sigmoid(), cls_output.sigmoid()], 1)
                 bs, _, ny, nx = y.shape
                 #y = y.view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
@@ -82,19 +83,18 @@ class Detect(nn.Module):
                     y[..., 0:2] = (y[..., 0:2] + self.grid[i]) * self.stride[i]  # xy
                     y[..., 2:4] = torch.exp(y[..., 2:4]) * self.stride[i] # wh
                 else:
-                    deploy = True
-                    if deploy == False:
+                    if decode == True:
                         #xy = (y[..., 0:2] + self.grid[i]) * self.stride[i]  # xy
                         #wh = torch.exp(y[..., 2:4]) * self.stride[i]  # wh
                         #y = torch.cat((xy, wh, y[..., 4:]), -1)
                         y = self.decode_output(y, self.stride, self.grid, i)
                     else:
                         y = y
-                    print(y.shape)    
-                #z.append(y.view(bs, -1, self.no))
-                z.append(y.view(bs, 1, ny*nx, self.no))
-        #return x if self.training else torch.cat(z, 1)
-        return x if self.training else torch.cat(z, 2)
+                if self.inplace:    
+                    z.append(y.view(bs, -1, self.no))
+                else:    
+                    z.append(y.view(bs, 1, ny*nx, self.no))
+        return x if self.training else torch.cat(z, 1) if (self.inplace) else torch.cat(z, 2)
 
     def decode_output(self, y, stride, grid, i):
         xy, wh, obj, cls = torch.split(y, [2, 2, 1, self.nc], 3)
