@@ -70,7 +70,6 @@ class Inferer:
         label_save_path = osp.join(save_dir, 'labels', 'labels.txt')
         vid_path, vid_writer, windows = None, None, []
         fps_calculator = CalcFPS()
-
         sample_img = cv2.imread(self.files.files[0])
         height, width = sample_img.shape[:2]
         vis_folder = "/world/data-gpu-94/liyang/Github_projects/YOLOv6/runs/inference/exp"
@@ -180,7 +179,7 @@ class Inferer:
                         vid_writer.write(img_src)
 
     @staticmethod
-    def precess_image(img_src, img_size, stride, half):
+    def process_image(img_src, img_size, stride, half):
         '''Process image before image inference.'''
         image = letterbox(img_src, img_size, stride=stride)[0]
         # Convert
